@@ -1,0 +1,19 @@
+name = "cloudflare-ledger"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ledger_db"
+database_id = "YOUR_D1_DATABASE_ID_HERE"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "YOUR_KV_NAMESPACE_ID_HERE"
+
+[vars]
+ONEAPI_BASE_URL = "https://api.openai.com/v1"
