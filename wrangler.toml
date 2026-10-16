@@ -9,11 +9,11 @@ binding = "AI"
 [[d1_databases]]
 binding = "DB"
 database_name = "ledger_db"
-database_id = "YOUR_D1_DATABASE_ID_HERE"
+database_id = "93715d6d-ec6a-46b0-87bb-3ca81b8c864d"
 
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "YOUR_KV_NAMESPACE_ID_HERE"
+id = "f6a1142c4b8041819aa53913f2b5494c"
 
 [vars]
 ONEAPI_BASE_URL = "https://api.openai.com/v1"
