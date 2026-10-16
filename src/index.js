@@ -10,12 +10,13 @@ export default {
         const url = new URL(request.url);
         const path = url.pathname;
 
+        // 1. 初始化密码接口（支持网页端直接提交）
         if (path === '/init' && request.method === 'POST') {
             try {
                 const existing = await getAdmin(env.DB);
                 if (existing) return Response.json({ ok: false, error: "管理员已存在，初始化接口已关闭" }, { status: 403 });
                 const { pwd } = await request.json();
-                if (!pwd || pwd.length < 6) return Response.json({ ok: false, error: "密码至少6位" }, { status: 400 });
+                if (!pwd || pwd.length < 6) return Response.json({ ok: false, error: "密码至少需要6位" }, { status: 400 });
                 const hash = await hashPassword(pwd);
                 const id = crypto.randomUUID();
                 await env.DB.prepare("INSERT INTO admins (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)").bind(id, 'admin', hash, Date.now()).run();
@@ -25,10 +26,20 @@ export default {
             }
         }
 
+        // 2. 检查是否需要初始化的状态接口
+        if (path === '/api/status' && request.method === 'GET') {
+            try {
+                const admin = await getAdmin(env.DB);
+                return Response.json({ ok: true, initialized: !!admin });
+            } catch (err) {
+                return Response.json({ ok: true, initialized: false });
+            }
+        }
+
         if (path === '/api/login' && request.method === 'POST') {
             try {
                 const admin = await getAdmin(env.DB);
-                if (!admin) return Response.json({ ok: false, error: "系统尚未初始化，请先访问 /init" }, { status: 400 });
+                if (!admin) return Response.json({ ok: false, error: "系统尚未初始化" }, { status: 400 });
                 const { pwd } = await request.json();
                 const isValid = await verifyPassword(pwd, admin.password_hash);
                 if (!isValid) return Response.json({ ok: false, error: "密码错误" }, { status: 401 });
@@ -58,12 +69,65 @@ export default {
             });
         }
 
-        if (path === '/login') {
-            return new Response(renderLoginPage(), { headers: { "Content-Type": "text/html;charset=UTF-8" } });
+        // 网页登录页（自动判断是否需要初始化）
+        if (path === '/login' || path === '/') {
+            const admin = await getAdmin(env.DB);
+            if (!admin && path === '/') {
+                // 如果还未初始化，直接返回一个超级友好的网页初始化表单
+                return new Response(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统初始化 - 个人记账系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-100">
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-bold text-slate-800">🚀 欢迎使用个人记账系统</h1>
+            <p class="text-sm text-slate-500 mt-2">首次使用，请先设置您的管理员密码</p>
+        </div>
+        <form id="initForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">设置管理密码 (至少6位)</label>
+                <input type="password" id="initPwd" required minlength="6" placeholder="请输入新密码" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+            </div>
+            <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition duration-200">完成初始化并进入</button>
+        </form>
+    </div>
+    <script>
+        document.getElementById('initForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pwd = document.getElementById('initPwd').value;
+            const res = await fetch('/init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pwd })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                alert('初始化成功！即将进入登录页');
+                window.location.href = '/login';
+            } else {
+                alert(data.error || '初始化失败');
+            }
+        });
+    </script>
+</body>
+</html>`, { headers: { "Content-Type": "text/html;charset=UTF-8" } });
+            }
+            if (path === '/login') {
+                return new Response(renderLoginPage(), { headers: { "Content-Type": "text/html;charset=UTF-8" } });
+            }
         }
 
         const session = await checkAuth(request, env);
         if (!session) {
+            const admin = await getAdmin(env.DB);
+            if (!admin) {
+                return Response.redirect(new URL('/', request.url), 302); // 未初始化重定向到初始化页
+            }
             if (path.startsWith('/api/')) {
                 return Response.json({ ok: false, error: "未授权，请先登录" }, { status: 401 });
             }
